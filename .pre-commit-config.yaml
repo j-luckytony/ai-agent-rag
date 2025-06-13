@@ -1,3 +1,5 @@
+exclude: '^(frontend/(node_modules|dist|build)/|backend/(venv|\.venv|__pycache__)/|.*\.lock$)'
+
 repos:
   # Basic file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -15,19 +17,19 @@ repos:
       - id: black
         files: ^backend/.*\.py$
 
-  # Python linting (backend only)  
+  # Python linting (backend only)
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0
     hooks:
       - id: flake8
         files: ^backend/.*\.py$
 
-  # Frontend formatting check (simple and fast)
+  # Frontend formatting (auto-fix)
   - repo: local
     hooks:
-      - id: prettier-check
-        name: Prettier check (frontend)
-        entry: bash -c 'cd frontend && npm run format:check'
+      - id: prettier-format
+        name: Prettier format (frontend)
+        entry: bash -c 'cd frontend && npm run format'
         language: system
         files: ^frontend/src/.*\.(ts|tsx|js|jsx|json|css|md)$
         pass_filenames: false
