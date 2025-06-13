@@ -1,19 +1,40 @@
-# AI Agent for Reasoning-Based Retrieval
+# AI Agent for Document Retrieval
 
-A take-home assignment implementing an AI agent that intelligently decides between PDF documents and structured CSV data for answering user questions.
+A RAG-based AI agent that retrieves information from military field manuals and form templates.
 
 ## Quick Start
 
-### Backend
-```bash
-cd backend
-pip install -r requirements.txt
-python main.py
-```
+### Environment Setup
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
+1. **Backend Configuration**:
+   ```bash
+   cd backend
+   cp .env.example .env
+   # Edit .env and add your OpenAI API key
+   ```
+
+2. **Frontend Configuration**:
+   ```bash
+   cd frontend  
+   cp .env.example .env
+   # Default API URL is http://localhost:5000
+   ```
+
+### Installation & Running
+
+1. **Install dependencies**:
+   ```bash
+   make install
+   ```
+
+2. **Start backend**:
+   ```bash
+   make run-backend
+   ```
+
+3. **Start frontend** (in another terminal):
+   ```bash
+   make run-frontend
+   ```
+
+4. **Open in browser**: http://localhost:3000
