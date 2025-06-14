@@ -1,4 +1,4 @@
-exclude: '^(frontend/(node_modules|dist|build)/|backend/(venv|\.venv|__pycache__)/|.*\.lock$)'
+exclude: '^(frontend/(node_modules|dist|build)/|backend/(venv|\.venv|__pycache__)/|data/|.*\.lock$)'
 
 repos:
   # Basic file checks

@@ -2,6 +2,7 @@ import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
+from agent import RAGAgent
 
 # Load environment variables
 load_dotenv()
@@ -13,6 +14,14 @@ app = Flask(__name__)
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 CORS(app, origins=[frontend_url])
 
+# Initialize RAG agent
+try:
+    rag_agent = RAGAgent()
+    print("RAG Agent initialized successfully")
+except Exception as e:
+    print(f"Error initializing RAG Agent: {e}")
+    rag_agent = None
+
 
 @app.route("/health")
 def health():
@@ -21,16 +30,31 @@ def health():
 
 @app.route("/query", methods=["POST"])
 def query():
+    if not rag_agent:
+        return (
+            jsonify(
+                {"error": "RAG Agent not initialized. Please check OpenAI API key."}
+            ),
+            500,
+        )
+
     data = request.get_json()
     question = data.get("question", "")
 
-    # TODO: implement AI agent logic
-    return jsonify(
-        {
-            "answer": f"You asked: {question}. AI agent not implemented yet.",
-            "sources": [],
-        }
-    )
+    if not question.strip():
+        return jsonify({"error": "Question is required"}), 400
+
+    try:
+        # Process query using RAG agent
+        result = rag_agent.process_query(question)
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error processing query: {e}")
+        return (
+            jsonify({"error": "An error occurred while processing your question"}),
+            500,
+        )
 
 
 if __name__ == "__main__":
