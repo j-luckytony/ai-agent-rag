@@ -16,6 +16,7 @@ repos:
     hooks:
       - id: black
         files: ^backend/.*\.py$
+        args: [--line-length=88]
 
   # Python linting (backend only)
   - repo: https://github.com/pycqa/flake8
@@ -23,6 +24,7 @@ repos:
     hooks:
       - id: flake8
         files: ^backend/.*\.py$
+        args: [--max-line-length=88]
 
   # Frontend formatting (auto-fix)
   - repo: local

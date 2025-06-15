@@ -14,13 +14,22 @@ app = Flask(__name__)
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 CORS(app, origins=[frontend_url])
 
+
 # Initialize RAG agent
-try:
-    rag_agent = RAGAgent()
-    print("RAG Agent initialized successfully")
-except Exception as e:
-    print(f"Error initializing RAG Agent: {e}")
-    rag_agent = None
+def initialize_agent():
+    """Initialize RAG Agent"""
+    global rag_agent
+    try:
+        rag_agent = RAGAgent()
+        # Load data during startup for better performance
+        rag_agent.load_data()
+        print("RAG Agent initialized successfully with data loaded")
+    except Exception as e:
+        print(f"Failed to initialize RAG Agent: {e}")
+        rag_agent = None
+
+
+initialize_agent()
 
 
 @app.route("/health")
