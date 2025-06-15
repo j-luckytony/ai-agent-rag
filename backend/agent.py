@@ -18,7 +18,7 @@ class RAGAgent:
 
         # Initialize LLM for source reasoning
         self.llm = ChatOpenAI(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             openai_api_key=self.openai_api_key,
             temperature=0.1,  # Low temperature for consistent reasoning
         )
