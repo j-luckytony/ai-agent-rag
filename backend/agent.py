@@ -1,4 +1,5 @@
 import os
+import json
 import pandas as pd
 from typing import List, Dict
 from langchain_openai import ChatOpenAI
@@ -29,6 +30,77 @@ class RAGAgent:
         self.loaded = False
 
         print("RAG Agent initialized - source decision mode")
+
+    def _get_context_and_sources(self, question: str):
+        """Helper method to get context and sources for a question"""
+        # Load data if not already loaded
+        if not self.loaded:
+            self.load_data()
+
+        # Step 1: Decide which sources to use
+        source_decision = self._decide_sources(question)
+
+        # Step 2: Retrieve relevant information
+        context_parts = []
+        sources_used = []
+
+        if source_decision["use_pdf"] and self.pdf_documents:
+            pdf_docs = self._search_pdf(question)
+            if pdf_docs:
+                sources_used.append(
+                    {
+                        "name": "Military Field Manual (PDF)",
+                        "url": "/files/ARN42404-FM_5-0-000-WEB-1.pdf",
+                        "type": "pdf",
+                    }
+                )
+                context_parts.append("=== MILITARY FIELD MANUAL ===")
+                for i, doc in enumerate(pdf_docs, 1):
+                    context_parts.append(f"Document {i}:\n{doc.page_content}")
+
+        if source_decision["use_csv"] and self.csv_data is not None:
+            csv_rows = self._search_csv(question)
+            if csv_rows:
+                sources_used.append(
+                    {
+                        "name": "Form Templates (CSV)",
+                        "url": "/files/template_fields.csv",
+                        "type": "csv",
+                    }
+                )
+                context_parts.append("=== FORM TEMPLATES ===")
+                for i, row in enumerate(csv_rows, 1):
+                    row_context = "\n".join([f"{k}: {v}" for k, v in row.items()])
+                    context_parts.append(f"Template {i}:\n{row_context}")
+
+        context = "\n\n".join(context_parts) if context_parts else ""
+
+        return {
+            "context": context,
+            "sources_used": sources_used,
+            "source_decision": source_decision,
+        }
+
+    def _get_response_prompt(self):
+        """Helper method to get the response prompt template"""
+        return PromptTemplate(
+            input_variables=["question", "context"],
+            template="""\
+You are a military AI assistant with access to field manual information and \
+form templates.
+
+Based on the provided context, answer the user's question clearly and accurately.
+
+Context:
+{context}
+
+Question: {question}
+
+Provide a helpful, detailed answer based on the context.
+If the context doesn't fully answer the question, say so clearly.
+
+Answer:""",
+        )
 
     def load_data(self):
         """Load PDF and CSV data for retrieval"""
@@ -116,79 +188,22 @@ class RAGAgent:
 
     def process_query(self, question: str):
         """Process query with full RAG pipeline"""
-
-        # Load data if not already loaded
-        if not self.loaded:
-            self.load_data()
-
-        # Step 1: Decide which sources to use
-        source_decision = self._decide_sources(question)
-
-        # Step 2: Retrieve relevant information
-        context_parts = []
-        sources_used = []
-
-        if source_decision["use_pdf"] and self.pdf_documents:
-            pdf_docs = self._search_pdf(question)
-            if pdf_docs:
-                sources_used.append(
-                    {
-                        "name": "Military Field Manual (PDF)",
-                        "url": "/files/ARN42404-FM_5-0-000-WEB-1.pdf",
-                        "type": "pdf",
-                    }
-                )
-                context_parts.append("=== MILITARY FIELD MANUAL ===")
-                for i, doc in enumerate(pdf_docs, 1):
-                    context_parts.append(f"Document {i}:\n{doc.page_content}")
-
-        if source_decision["use_csv"] and self.csv_data is not None:
-            csv_rows = self._search_csv(question)
-            if csv_rows:
-                sources_used.append(
-                    {
-                        "name": "Form Templates (CSV)",
-                        "url": "/files/template_fields.csv",
-                        "type": "csv",
-                    }
-                )
-                context_parts.append("=== FORM TEMPLATES ===")
-                for i, row in enumerate(csv_rows, 1):
-                    row_context = "\n".join([f"{k}: {v}" for k, v in row.items()])
-                    context_parts.append(f"Template {i}:\n{row_context}")
+        # Step 1 & 2: Get context and sources (handled by helper method)
+        context_and_sources = self._get_context_and_sources(question)
+        context = context_and_sources["context"]
+        sources_used = context_and_sources["sources_used"]
+        source_decision = context_and_sources["source_decision"]
 
         # Step 3: Generate response using retrieved context
-        context = "\n\n".join(context_parts)
-
         if not context:
             return {
-                "answer": (
-                    "I couldn't find relevant information in the available sources "
-                    "for your question."
-                ),
+                "answer": ("I couldn't find relevant information for your question."),
                 "sources_used": [],
                 "reasoning": source_decision["reasoning"],
             }
 
         # Create response prompt
-        response_prompt = PromptTemplate(
-            input_variables=["question", "context"],
-            template="""\
-You are a military AI assistant with access to field manual information and \
-form templates.
-
-Based on the provided context, answer the user's question clearly and accurately.
-
-Context:
-{context}
-
-Question: {question}
-
-Provide a helpful, detailed answer based on the context.
-If the context doesn't fully answer the question, say so clearly.
-
-Answer:""",
-        )
+        response_prompt = self._get_response_prompt()
 
         # Generate response
         chain = LLMChain(llm=self.llm, prompt=response_prompt)
@@ -199,6 +214,61 @@ Answer:""",
             "sources_used": sources_used,
             "reasoning": source_decision["reasoning"],
         }
+
+    def process_query_stream(self, question: str):
+        """Process query with streaming response for real-time updates"""
+        # Step 1 & 2: Get context and sources (handled by helper method)
+        context_and_sources = self._get_context_and_sources(question)
+        context = context_and_sources["context"]
+        sources_used = context_and_sources["sources_used"]
+        source_decision = context_and_sources["source_decision"]
+
+        # Yield initial metadata with sources
+        initial_data = {
+            "type": "sources",
+            "sources_used": sources_used,
+            "reasoning": source_decision["reasoning"],
+        }
+        yield f"data: {json.dumps(initial_data)}\n\n"
+
+        # Step 3: Generate response with streaming
+        if not context:
+            no_context_data = {
+                "type": "answer",
+                "answer": "I couldn't find relevant information for your question.",
+                "sources_used": [],
+                "reasoning": source_decision["reasoning"],
+            }
+            yield f"data: {json.dumps(no_context_data)}\n\n"
+            return
+
+        response_prompt = self._get_response_prompt()
+        prompt = response_prompt.format(question=question, context=context)
+
+        try:
+            # Use streaming with OpenAI
+            response = self.llm.stream(prompt)
+
+            answer_parts = []
+            for chunk in response:
+                if chunk.content:
+                    answer_parts.append(chunk.content)
+                    # Send each chunk to client
+                    chunk_data = {"type": "chunk", "content": chunk.content}
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+
+            # Send final completion message
+            final_data = {
+                "type": "complete",
+                "answer": "".join(answer_parts).strip(),
+                "sources_used": sources_used,
+                "reasoning": source_decision["reasoning"],
+            }
+            yield f"data: {json.dumps(final_data)}\n\n"
+
+        except Exception as e:
+            error_data = {"type": "error", "error": str(e)}
+            yield f"data: {json.dumps(error_data)}\n\n"
 
     def _decide_sources(self, question: str):
         """Use LLM to intelligently decide which data sources to use"""

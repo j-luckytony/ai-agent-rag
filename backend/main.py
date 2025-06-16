@@ -1,5 +1,6 @@
 import os
-from flask import Flask, jsonify, request, send_from_directory
+import json
+from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from agent import RAGAgent
@@ -75,6 +76,48 @@ def query():
             jsonify({"error": "An error occurred while processing your question"}),
             500,
         )
+
+
+@app.route("/query/stream", methods=["POST"])
+def query_stream():
+    """Stream RAG responses in real-time using Server-Sent Events"""
+    if not rag_agent:
+        return (
+            jsonify(
+                {"error": "RAG Agent not initialized. Please check OpenAI API key."}
+            ),
+            500,
+        )
+
+    data = request.get_json()
+    question = data.get("question", "")
+
+    if not question.strip():
+        return jsonify({"error": "Question is required"}), 400
+
+    def generate_stream():
+        """Generator function for streaming response"""
+        try:
+            # Stream the RAG response
+            for chunk in rag_agent.process_query_stream(question):
+                yield chunk
+
+        except Exception as e:
+            print(f"Error in streaming query: {e}")
+            error_data = {
+                "type": "error",
+                "error": "An error occurred while processing your question",
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+
+    # Return SSE response
+    return Response(
+        generate_stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 if __name__ == "__main__":
