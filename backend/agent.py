@@ -131,7 +131,13 @@ class RAGAgent:
         if source_decision["use_pdf"] and self.pdf_documents:
             pdf_docs = self._search_pdf(question)
             if pdf_docs:
-                sources_used.append("Military Field Manual (PDF)")
+                sources_used.append(
+                    {
+                        "name": "Military Field Manual (PDF)",
+                        "url": "/files/ARN42404-FM_5-0-000-WEB-1.pdf",
+                        "type": "pdf",
+                    }
+                )
                 context_parts.append("=== MILITARY FIELD MANUAL ===")
                 for i, doc in enumerate(pdf_docs, 1):
                     context_parts.append(f"Document {i}:\n{doc.page_content}")
@@ -139,7 +145,13 @@ class RAGAgent:
         if source_decision["use_csv"] and self.csv_data is not None:
             csv_rows = self._search_csv(question)
             if csv_rows:
-                sources_used.append("Form Templates (CSV)")
+                sources_used.append(
+                    {
+                        "name": "Form Templates (CSV)",
+                        "url": "/files/template_fields.csv",
+                        "type": "csv",
+                    }
+                )
                 context_parts.append("=== FORM TEMPLATES ===")
                 for i, row in enumerate(csv_rows, 1):
                     row_context = "\n".join([f"{k}: {v}" for k, v in row.items()])
@@ -198,24 +210,40 @@ for military questions.
 
 Available sources:
 - PDF: Unstructured data - Military field manual (FM 5-0) containing
-  doctrine, procedures, MDMP, planning processes
+  doctrine, procedures, MDMP, planning processes, deployment operations, tactics
 - CSV: Structured data - Form templates and examples for awards,
-  citations, personnel actions
+  citations, personnel actions, administrative paperwork
 
 Analyze this question and decide which source(s) would be most helpful:
 Question: {question}
+
+Important guidelines:
+- Use [pdf] ONLY for: pure doctrine, tactics, procedures without paperwork
+- Use [csv] ONLY for: pure forms, templates without operational context
+- Use [pdf,csv] for: questions about deployment, operations with documentation,
+  anything involving BOTH procedures AND paperwork
+- When in doubt between sources, prefer [pdf,csv] for comprehensive answers
+
+Key trigger words for [pdf,csv]:
+- deployment
+- combat zone
+- operations
+- documentation
+- paperwork
+- forms needed
+- prepare for
 
 Respond in this exact format:
 SOURCES: [pdf] or [csv] or [pdf,csv]
 REASONING: Brief explanation of why these sources were chosen
 
 Examples:
-- "What is the MDMP process?" → SOURCES: [pdf], REASONING: MDMP is
-  military doctrine from unstructured field manual
-- "Help me write an award citation" → SOURCES: [csv], REASONING:
-  Award citations are structured templates in CSV
-- "What are military leadership principles?" → SOURCES: [pdf,csv],
-  REASONING: Both doctrine and examples needed""",
+- "What is the MDMP process?" → SOURCES: [pdf], REASONING: Pure military doctrine
+- "Help me write an award citation" → SOURCES: [csv], REASONING: Pure template task
+- "What forms do I need for deployment?" → SOURCES: [pdf,csv], REASONING:
+  Deployment involves both operational procedures AND required forms
+- "How do I prepare for combat zone?" → SOURCES: [pdf,csv], REASONING:
+  Combat preparation requires both tactical knowledge AND administrative paperwork""",
         )
 
         try:

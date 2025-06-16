@@ -4,6 +4,7 @@ import { Bot, Clock, ExternalLink, Lightbulb, User } from 'lucide-react';
 import React from 'react';
 
 import { cn } from '../lib/utils';
+import { DEFAULT_CONFIG } from '../services/ragService';
 import type { ChatMessage as ChatMessageType } from '../types';
 
 interface ChatMessageProps {
@@ -40,6 +41,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const handleClick = () => {
     if (onClick) {
       onClick(message);
+    }
+  };
+
+  const handleSourceClick = (sourceUrl: string) => {
+    if (sourceUrl) {
+      window.open(`${DEFAULT_CONFIG.baseUrl}${sourceUrl}`, '_blank');
     }
   };
 
@@ -103,12 +110,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             </div>
             <div className="flex flex-wrap gap-1">
               {message.metadata!.sources_used!.map((source, index) => (
-                <span
+                <button
                   key={index}
-                  className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                  onClick={() => handleSourceClick(source.url)}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700 transition-colors hover:bg-blue-200"
+                  title={`Click to open ${source.name}`}
                 >
-                  {source}
-                </span>
+                  <ExternalLink size={10} className="text-blue-600" />
+                  {source.name}
+                </button>
               ))}
             </div>
           </div>

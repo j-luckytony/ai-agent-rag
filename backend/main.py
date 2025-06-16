@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from agent import RAGAgent
@@ -35,6 +35,17 @@ initialize_agent()
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "message": "AI Agent backend is running"})
+
+
+@app.route("/files/<filename>")
+def serve_file(filename):
+    """Serve static files (PDF, CSV) from the data directory"""
+    try:
+        # Get the data directory path (one level up from backend)
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        return send_from_directory(data_dir, filename)
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
 
 
 @app.route("/query", methods=["POST"])

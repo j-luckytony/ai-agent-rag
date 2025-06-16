@@ -5,12 +5,13 @@
  * It provides a clean interface for sending questions and receiving responses,
  * with proper error handling, timeout management, and type safety.
  */
+import type { SourceInfo } from '../types';
 
 export interface RAGResponse {
   /** The generated answer from the AI */
   answer: string;
   /** List of sources that were used to generate the answer */
-  sources_used: string[];
+  sources_used: SourceInfo[];
   /** AI's reasoning for why these sources were selected */
   reasoning: string;
   /** Optional status information */
@@ -26,7 +27,7 @@ export interface APIConfig {
   headers?: Record<string, string>;
 }
 
-const DEFAULT_CONFIG: APIConfig = {
+export const DEFAULT_CONFIG: APIConfig = {
   baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:5000',
   timeout: 30000, // 30 seconds
   headers: {
@@ -112,12 +113,23 @@ export class RAGService {
    * @returns True if valid RAG response
    */
   private isValidRAGResponse(data: unknown): data is RAGResponse {
+    if (typeof data !== 'object' || data === null) {
+      return false;
+    }
+
+    const response = data as Record<string, unknown>;
+
     return (
-      typeof data === 'object' &&
-      data !== null &&
-      typeof (data as Record<string, unknown>).answer === 'string' &&
-      Array.isArray((data as Record<string, unknown>).sources_used) &&
-      typeof (data as Record<string, unknown>).reasoning === 'string'
+      typeof response.answer === 'string' &&
+      Array.isArray(response.sources_used) &&
+      response.sources_used.every(
+        (source: unknown) =>
+          typeof source === 'object' &&
+          source !== null &&
+          'name' in source &&
+          'url' in source
+      ) &&
+      typeof response.reasoning === 'string'
     );
   }
 }
@@ -128,7 +140,7 @@ export class RAGService {
 export class APIError extends Error {
   constructor(
     message: string,
-    public status: number = 0,
+    public status: number,
     public details?: string
   ) {
     super(message);
