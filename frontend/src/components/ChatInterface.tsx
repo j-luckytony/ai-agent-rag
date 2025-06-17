@@ -1,6 +1,6 @@
-import { MessageCircle, RefreshCw, Settings, Trash2 } from 'lucide-react';
+import { MessageCircle, RefreshCw, Settings, Trash2, Zap } from 'lucide-react';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { useRAGAgent } from '../hooks/useRAGAgent';
 import { cn } from '../lib/utils';
@@ -10,8 +10,6 @@ import { Button } from './ui';
 
 interface ChatInterfaceProps {
   placeholder?: string;
-  showSources?: boolean;
-  showReasoning?: boolean;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -24,22 +22,25 @@ const SUGGESTED_QUESTIONS = [
  * ChatInterface component providing a complete conversational experience
  *
  * @param placeholder - Custom placeholder text for input
- * @param showSources - Whether to show source attribution
- * @param showReasoning - Whether to show AI reasoning
  */
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   placeholder,
-  showSources = true,
-  showReasoning = false,
 }) => {
-  const { messages, isLoading, error, sendQuestion, clearConversation, retry } =
-    useRAGAgent();
+  const {
+    messages,
+    isLoading,
+    error,
+    streamingMode,
+    sendQuestion,
+    clearConversation,
+    retry,
+    toggleStreamingMode,
+  } = useRAGAgent();
 
-  const [currentQuestion, setCurrentQuestion] = React.useState('');
-  const [showSettings, setShowSettings] = React.useState(false);
-  const [localShowSources, setLocalShowSources] = React.useState(showSources);
-  const [localShowReasoning, setLocalShowReasoning] =
-    React.useState(showReasoning);
+  const [currentQuestion, setCurrentQuestion] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showSources, setShowSources] = useState(true);
+  const [showReasoning, setShowReasoning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const hasMessages = messages.length > 0;
@@ -56,12 +57,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Sync local settings with props
-  useEffect(() => {
-    setLocalShowSources(showSources);
-    setLocalShowReasoning(showReasoning);
-  }, [showSources, showReasoning]);
 
   const handleQuestionSubmit = async (question: string) => {
     setCurrentQuestion('');
@@ -84,9 +79,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <div className="flex items-center gap-3">
           <MessageCircle className="h-5 w-5 text-blue-600" />
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">AI Agent</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              AI Agent{' '}
+              {streamingMode && (
+                <span className="text-sm text-blue-600">(Streaming)</span>
+              )}
+            </h2>
             <p className="text-sm text-gray-600">
               Ask about military procedures or forms
+              {streamingMode
+                ? ' • Real-time responses'
+                : ' • Standard responses'}
             </p>
           </div>
         </div>
@@ -100,7 +103,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           >
             <Settings className="h-4 w-4" />
           </Button>
-
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              toggleStreamingMode();
+            }}
+            disabled={isLoading}
+            className={cn(
+              'h-8 w-8 p-0 transition-colors',
+              isLoading
+                ? 'cursor-not-allowed opacity-50'
+                : streamingMode
+                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  : 'text-gray-600 hover:text-gray-700'
+            )}
+            title={
+              isLoading
+                ? 'Cannot change streaming mode while processing'
+                : streamingMode
+                  ? 'Streaming Mode: ON'
+                  : 'Streaming Mode: OFF'
+            }
+          >
+            <Zap
+              className={cn(
+                'h-4 w-4',
+                streamingMode && !isLoading && 'text-blue-600'
+              )}
+            />
+          </Button>
           {hasMessages && (
             <Button
               variant="ghost"
@@ -122,8 +154,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <label className="text-sm font-medium">Show Sources</label>
               <input
                 type="checkbox"
-                checked={localShowSources}
-                onChange={() => setLocalShowSources(!localShowSources)}
+                checked={showSources}
+                onChange={() => setShowSources(!showSources)}
                 className="rounded"
               />
             </div>
@@ -131,8 +163,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <label className="text-sm font-medium">Show Reasoning</label>
               <input
                 type="checkbox"
-                checked={localShowReasoning}
-                onChange={() => setLocalShowReasoning(!localShowReasoning)}
+                checked={showReasoning}
+                onChange={() => setShowReasoning(!showReasoning)}
                 className="rounded"
               />
             </div>
@@ -165,8 +197,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <>
             <MessageList
               messages={messages}
-              showSources={localShowSources}
-              showReasoning={localShowReasoning}
+              showSources={showSources}
+              showReasoning={showReasoning}
             />
             <div ref={messagesEndRef} />
           </>

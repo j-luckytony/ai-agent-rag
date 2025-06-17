@@ -18,6 +18,25 @@ export interface RAGResponse {
   status?: string;
 }
 
+/** Streaming response types for Server-Sent Events */
+export interface StreamChunk {
+  /** Type of streaming chunk - determines how to handle the data */
+  type: 'sources' | 'chunk' | 'complete' | 'error';
+  /** Content chunk from streaming response (for type: 'chunk') */
+  content?: string;
+  /** List of sources used for the response (for type: 'sources' or 'complete') */
+  sources_used?: SourceInfo[];
+  /** AI reasoning for source selection (for type: 'sources' or 'complete') */
+  reasoning?: string;
+  /** Complete answer text (for type: 'complete') */
+  answer?: string;
+  /** Error message (for type: 'error') */
+  error?: string;
+}
+
+/** Callback function for handling streaming responses */
+export type StreamCallback = (chunk: StreamChunk) => void;
+
 export interface APIConfig {
   /** Base URL for the backend API */
   baseUrl: string;
@@ -91,6 +110,98 @@ export class RAGService {
       }
 
       return data;
+    } catch (error) {
+      if (error instanceof APIError) {
+        throw error;
+      }
+
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new APIError('Request timeout', 408);
+        }
+        throw new APIError(`Network error: ${error.message}`, 0);
+      }
+
+      throw new APIError('Unknown error occurred', 500);
+    }
+  }
+
+  /**
+   * Send a question to the RAG agent and get a streaming response
+   * @param question - The question to ask
+   * @param onChunk - Callback function to handle each streaming chunk
+   * @returns Promise that resolves when streaming is complete
+   * @throws APIError if the request fails
+   */
+  async askQuestionStream(
+    question: string,
+    onChunk: StreamCallback
+  ): Promise<void> {
+    if (!question.trim()) {
+      throw new APIError('Question cannot be empty', 400);
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = this.config.timeout
+        ? setTimeout(() => controller.abort(), this.config.timeout)
+        : null;
+
+      const response = await fetch(`${this.config.baseUrl}/query/stream`, {
+        method: 'POST',
+        headers: this.config.headers,
+        body: JSON.stringify({ question: question.trim() }),
+        signal: controller.signal,
+      });
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new APIError(
+          errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+          response.status,
+          errorData.details
+        );
+      }
+
+      // Handle SSE
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new APIError('No response stream available', 500);
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          // Decode the chunk and add to buffer
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete lines
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                onChunk(data as StreamChunk);
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', line);
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
     } catch (error) {
       if (error instanceof APIError) {
         throw error;
