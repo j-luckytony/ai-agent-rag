@@ -1,4 +1,11 @@
-import { MessageCircle, RefreshCw, Settings, Trash2, Zap } from 'lucide-react';
+import {
+  Brain,
+  Eye,
+  MessageCircle,
+  RefreshCw,
+  Trash2,
+  Zap,
+} from 'lucide-react';
 
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -38,16 +45,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   } = useRAGAgent();
 
   const [currentQuestion, setCurrentQuestion] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
   const [showSources, setShowSources] = useState(true);
   const [showReasoning, setShowReasoning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const hasMessages = messages.length > 0;
-  const userMessageCount = messages.filter((msg) => msg.role === 'user').length;
-  const assistantMessageCount = messages.filter(
-    (msg) => msg.role === 'assistant'
-  ).length;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -98,10 +100,32 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowSettings(!showSettings)}
-            className="h-8 w-8 p-0"
+            onClick={() => setShowSources(!showSources)}
+            className={cn(
+              'flex h-8 items-center gap-1 px-3 py-1 transition-colors',
+              showSources
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                : 'text-gray-600 hover:text-gray-700'
+            )}
+            title={showSources ? 'Hide Sources' : 'Show Sources'}
           >
-            <Settings className="h-4 w-4" />
+            <Eye className="h-3 w-3" />
+            <span className="text-xs">Sources</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowReasoning(!showReasoning)}
+            className={cn(
+              'flex h-8 items-center gap-1 px-3 py-1 transition-colors',
+              showReasoning
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                : 'text-gray-600 hover:text-gray-700'
+            )}
+            title={showReasoning ? 'Hide Reasoning' : 'Show Reasoning'}
+          >
+            <Brain className="h-3 w-3" />
+            <span className="text-xs">Reason</span>
           </Button>
           <Button
             variant="ghost"
@@ -111,7 +135,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             }}
             disabled={isLoading}
             className={cn(
-              'h-8 w-8 p-0 transition-colors',
+              'flex h-8 items-center gap-1 px-3 py-1 transition-colors',
               isLoading
                 ? 'cursor-not-allowed opacity-50'
                 : streamingMode
@@ -126,12 +150,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   : 'Streaming Mode: OFF'
             }
           >
-            <Zap
-              className={cn(
-                'h-4 w-4',
-                streamingMode && !isLoading && 'text-blue-600'
-              )}
-            />
+            <Zap className="h-3 w-3" />
+            <span className="text-xs">Stream</span>
           </Button>
           {hasMessages && (
             <Button
@@ -145,36 +165,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           )}
         </div>
       </div>
-
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="border-b bg-gray-50 p-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Show Sources</label>
-              <input
-                type="checkbox"
-                checked={showSources}
-                onChange={() => setShowSources(!showSources)}
-                className="rounded"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Show Reasoning</label>
-              <input
-                type="checkbox"
-                checked={showReasoning}
-                onChange={() => setShowReasoning(!showReasoning)}
-                className="rounded"
-              />
-            </div>
-            <div className="text-xs text-gray-500">
-              Messages: {userMessageCount} questions, {assistantMessageCount}{' '}
-              responses
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Messages Area */}
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
