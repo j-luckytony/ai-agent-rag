@@ -320,8 +320,9 @@ for military questions.
 Available sources:
 - PDF: Unstructured data - Military field manual (FM 5-0) containing \
 doctrine, procedures, MDMP, planning processes, deployment operations, tactics
-- CSV: Structured data - Form templates and examples for awards, \
-citations, personnel actions, administrative paperwork
+- CSV: Structured data - Writing instructions, paragraph formats, templates and \
+examples for awards, citations, personnel actions, administrative paperwork, \
+military document creation
 
 Analyze this question and decide which source(s) would be most helpful:
 Question: {question}
@@ -331,6 +332,8 @@ Important guidelines:
 - Use [csv] ONLY for: pure forms, templates without operational context
 - Use [pdf,csv] for: questions about deployment, operations with documentation, \
 anything involving BOTH procedures AND paperwork
+- **IMPORTANT: Any writing task (write, create, draft, prepare documents) needs \
+[pdf,csv]**
 - When in doubt between sources, prefer [pdf,csv] for comprehensive answers
 
 Key trigger words for [pdf,csv]:
@@ -341,6 +344,12 @@ Key trigger words for [pdf,csv]:
 - paperwork
 - forms needed
 - prepare for
+- write
+- paragraph
+- situation
+- create
+- template
+- format
 
 Respond in this exact format:
 SOURCES: [pdf] or [csv] or [pdf,csv]
@@ -352,7 +361,10 @@ Examples:
 - "What forms do I need for deployment?" → SOURCES: [pdf,csv], REASONING: \
 Deployment involves both operational procedures AND required forms
 - "How do I prepare for combat zone?" → SOURCES: [pdf,csv], REASONING: \
-Combat preparation requires both tactical knowledge AND administrative paperwork""",
+Combat preparation requires both tactical knowledge AND administrative paperwork
+- "Write a situation paragraph for my mission" → SOURCES: [pdf,csv], REASONING: \
+Writing military documents requires both doctrinal knowledge AND formatting \
+instructions""",
         )
 
         try:
