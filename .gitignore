@@ -31,6 +31,12 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Vector databases
+chroma_db/
+backend/chroma_db/
+*.db
+*.sqlite
+
 # Cache
 .cache/
 .eslintcache

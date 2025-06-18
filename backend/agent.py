@@ -2,12 +2,14 @@ import os
 import json
 import pandas as pd
 from typing import List, Dict
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
+from langchain_community.vectorstores import Chroma
+from langchain.memory import ConversationBufferWindowMemory
 
 
 class RAGAgent:
@@ -24,12 +26,25 @@ class RAGAgent:
             temperature=0.1,  # Low temperature for consistent reasoning
         )
 
+        # Initialize vector embeddings
+        self.embeddings = OpenAIEmbeddings(openai_api_key=self.openai_api_key)
+
         # Data storage
         self.pdf_documents = None
         self.csv_data = None
+        self.pdf_vector_store = None
         self.loaded = False
 
-        print("RAG Agent initialized - source decision mode")
+        # Initialize conversation memory (last 5 exchanges)
+        self.conversation_memory = ConversationBufferWindowMemory(
+            k=5,  # Keep last 5 exchanges
+            return_messages=True,
+            memory_key="chat_history",
+        )
+
+        print(
+            "RAG Agent initialized - vector embeddings + " "conversation history mode"
+        )
 
     def _get_context_and_sources(self, question: str):
         """Helper method to get context and sources for a question"""
@@ -82,14 +97,19 @@ class RAGAgent:
         }
 
     def _get_response_prompt(self):
-        """Helper method to get the response prompt template"""
+        """Helper method to get the response prompt template with conversation
+        history"""
         return PromptTemplate(
-            input_variables=["question", "context"],
+            input_variables=["question", "context", "chat_history"],
             template="""\
 You are a military AI assistant with access to field manual information and \
 form templates.
 
-Based on the provided context, answer the user's question clearly and accurately.
+Previous conversation context:
+{chat_history}
+
+Based on the provided context and conversation history, answer the user's \
+question clearly and accurately.
 
 Context:
 {context}
@@ -97,6 +117,7 @@ Context:
 Question: {question}
 
 Provide a helpful, detailed answer based on the context.
+If you need to refer to previous conversation, use the chat history.
 If the context doesn't fully answer the question, say so clearly.
 
 Answer:""",
@@ -125,6 +146,15 @@ Answer:""",
                 )
                 self.pdf_documents = text_splitter.split_documents(documents)
                 print(f"Loaded {len(self.pdf_documents)} PDF chunks")
+
+                # Create ChromaDB vector store for semantic search
+                print("Creating vector embeddings...")
+                self.pdf_vector_store = Chroma.from_documents(
+                    documents=self.pdf_documents,
+                    embedding=self.embeddings,
+                    persist_directory="./chroma_db",  # Persistent storage
+                )
+                print("Vector store created successfully")
             else:
                 print("PDF file not found!")
 
@@ -150,23 +180,13 @@ Answer:""",
             traceback.print_exc()
 
     def _search_pdf(self, question: str, k: int = 3) -> List[Document]:
-        """Simple keyword-based search through PDF documents"""
-        if not self.pdf_documents:
+        """Vector similarity search through PDF documents"""
+        if not self.pdf_vector_store:
             return []
 
-        question_words = set(question.lower().split())
-        scored_docs = []
-
-        for doc in self.pdf_documents:
-            content_words = set(doc.page_content.lower().split())
-            # Calculate word overlap score
-            overlap = len(question_words.intersection(content_words))
-            if overlap > 0:
-                scored_docs.append((doc, overlap))
-
-        # Sort by score and return top k
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-        return [doc for doc, score in scored_docs[:k]]
+        # Use ChromaDB vector similarity search
+        docs = self.pdf_vector_store.similarity_search(question, k=k)
+        return docs
 
     def _search_csv(self, question: str, k: int = 3) -> List[Dict]:
         """Simple keyword-based search through CSV data"""
@@ -207,7 +227,16 @@ Answer:""",
 
         # Generate response
         chain = LLMChain(llm=self.llm, prompt=response_prompt)
-        answer = chain.run(question=question, context=context)
+        answer = chain.run(
+            question=question,
+            context=context,
+            chat_history=self.conversation_memory.buffer,
+        )
+
+        # Save conversation to memory
+        self.conversation_memory.save_context(
+            {"input": question}, {"output": answer.strip()}
+        )
 
         return {
             "answer": answer.strip(),
@@ -243,7 +272,11 @@ Answer:""",
             return
 
         response_prompt = self._get_response_prompt()
-        prompt = response_prompt.format(question=question, context=context)
+        prompt = response_prompt.format(
+            question=question,
+            context=context,
+            chat_history=self.conversation_memory.buffer,
+        )
 
         try:
             # Use streaming with OpenAI
@@ -266,6 +299,11 @@ Answer:""",
             }
             yield f"data: {json.dumps(final_data)}\n\n"
 
+            # Save conversation to memory
+            self.conversation_memory.save_context(
+                {"input": question}, {"output": "".join(answer_parts).strip()}
+            )
+
         except Exception as e:
             error_data = {"type": "error", "error": str(e)}
             yield f"data: {json.dumps(error_data)}\n\n"
@@ -275,14 +313,15 @@ Answer:""",
 
         decision_prompt = PromptTemplate(
             input_variables=["question"],
-            template="""You are an AI agent that decides which data sources to use \
+            template="""\
+You are an AI agent that decides which data sources to use \
 for military questions.
 
 Available sources:
-- PDF: Unstructured data - Military field manual (FM 5-0) containing
-  doctrine, procedures, MDMP, planning processes, deployment operations, tactics
-- CSV: Structured data - Form templates and examples for awards,
-  citations, personnel actions, administrative paperwork
+- PDF: Unstructured data - Military field manual (FM 5-0) containing \
+doctrine, procedures, MDMP, planning processes, deployment operations, tactics
+- CSV: Structured data - Form templates and examples for awards, \
+citations, personnel actions, administrative paperwork
 
 Analyze this question and decide which source(s) would be most helpful:
 Question: {question}
@@ -290,8 +329,8 @@ Question: {question}
 Important guidelines:
 - Use [pdf] ONLY for: pure doctrine, tactics, procedures without paperwork
 - Use [csv] ONLY for: pure forms, templates without operational context
-- Use [pdf,csv] for: questions about deployment, operations with documentation,
-  anything involving BOTH procedures AND paperwork
+- Use [pdf,csv] for: questions about deployment, operations with documentation, \
+anything involving BOTH procedures AND paperwork
 - When in doubt between sources, prefer [pdf,csv] for comprehensive answers
 
 Key trigger words for [pdf,csv]:
@@ -310,10 +349,10 @@ REASONING: Brief explanation of why these sources were chosen
 Examples:
 - "What is the MDMP process?" → SOURCES: [pdf], REASONING: Pure military doctrine
 - "Help me write an award citation" → SOURCES: [csv], REASONING: Pure template task
-- "What forms do I need for deployment?" → SOURCES: [pdf,csv], REASONING:
-  Deployment involves both operational procedures AND required forms
-- "How do I prepare for combat zone?" → SOURCES: [pdf,csv], REASONING:
-  Combat preparation requires both tactical knowledge AND administrative paperwork""",
+- "What forms do I need for deployment?" → SOURCES: [pdf,csv], REASONING: \
+Deployment involves both operational procedures AND required forms
+- "How do I prepare for combat zone?" → SOURCES: [pdf,csv], REASONING: \
+Combat preparation requires both tactical knowledge AND administrative paperwork""",
         )
 
         try:
