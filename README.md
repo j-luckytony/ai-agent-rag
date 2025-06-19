@@ -11,6 +11,10 @@ A sophisticated RAG (Retrieval-Augmented Generation) system that intelligently s
 - Shows you exactly which sources were used for each answer
 - Clean, modern interface with helpful controls
 
+## Documentation
+
+**[Design & Architecture](./DESIGN.md)** - Detailed explanation of design decisions, source selection logic, and development process
+
 ## Quick Start
 
 ### Prerequisites
